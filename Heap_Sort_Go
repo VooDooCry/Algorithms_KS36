@@ -1,0 +1,228 @@
+package main
+
+import (
+	"encoding/csv"
+	"fmt"
+	"math/rand"
+	"os"
+	"time"
+)
+
+type SeriesResult struct {
+	M                 int
+	Times             []time.Duration
+	TotalHeapifyCalls []int
+	InnerHeapifyCalls []int
+}
+
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	seriesMs := []int{1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000}
+	numSeries := len(seriesMs)
+	numAttempts := 20
+
+	results := make([]SeriesResult, numSeries)
+
+	for seriesIdx, m := range seriesMs {
+		fmt.Printf("\n=== Начало серии %d (N=%d) ===\n", seriesIdx+1, m)
+
+		seriesResults := SeriesResult{
+			M:                 m,
+			Times:             make([]time.Duration, numAttempts),
+			TotalHeapifyCalls: make([]int, numAttempts),
+			InnerHeapifyCalls: make([]int, numAttempts),
+		}
+
+		for attempt := 0; attempt < numAttempts; attempt++ {
+			arr := generateArray(m)
+
+			start := time.Now()
+			_, total, inner := heapSort(arr)
+			duration := time.Since(start)
+
+			seriesResults.Times[attempt] = duration
+			seriesResults.TotalHeapifyCalls[attempt] = total
+			seriesResults.InnerHeapifyCalls[attempt] = inner
+
+			fmt.Printf("Серия %d | № %02d | N = %6d | Время =%12v | Общая куча=%6d | Внутренняя куча=%7d\n",
+				seriesIdx+1,
+				attempt+1,
+				m,
+				duration.Round(100*time.Microsecond),
+				total,
+				inner)
+		}
+
+		results[seriesIdx] = seriesResults
+	}
+
+	fmt.Println("\n=== Статистика ===")
+	for i, res := range results {
+		var avgTime time.Duration
+		for _, t := range res.Times {
+			avgTime += t
+		}
+		avgTime /= time.Duration(numAttempts)
+
+		fmt.Printf("Серия %d (M=%6d) | Среднее время =%12v | Среднее кол-во общей кучи =%6.1f | среднее кол-во внутренней кучи=%7.1f\n",
+			i+1,
+			res.M,
+			avgTime.Round(100*time.Microsecond),
+			average(res.TotalHeapifyCalls),
+			average(res.InnerHeapifyCalls))
+	}
+	if err := saveToCSV(results, "results.csv"); err != nil {
+		fmt.Println("Ошибка при сохранении CSV:", err)
+	} else {
+		fmt.Println("\nДанные сохранены в results.csv")
+	}
+
+	if err := saveStatsToCSV(results, "stats.csv"); err != nil {
+		fmt.Println("Ошибка при сохранении статистики:", err)
+	} else {
+		fmt.Println("Статистика сохранена в stats.csv")
+	}
+}
+
+func generateArray(size int) []float64 {
+	arr := make([]float64, size)
+	for i := range arr {
+		arr[i] = rand.Float64()*2 - 1
+	}
+	return arr
+}
+
+func heapSort(arr []float64) (sorted []float64, totalHeapifyCalls, innerHeapifyCalls int) {
+	n := len(arr)
+	sorted = make([]float64, n)
+	copy(sorted, arr)
+
+	totalHeapifyCalls = 0
+	innerHeapifyCalls = 0
+
+	for i := n/2 - 1; i >= 0; i-- {
+		heapify(sorted, n, i, &totalHeapifyCalls, &innerHeapifyCalls)
+	}
+
+	for i := n - 1; i > 0; i-- {
+		sorted[0], sorted[i] = sorted[i], sorted[0]
+		heapify(sorted, i, 0, &totalHeapifyCalls, &innerHeapifyCalls)
+	}
+
+	return
+}
+
+func heapify(arr []float64, n, i int, totalCalls, innerCalls *int) {
+	*totalCalls++
+
+	largest := i
+	left := 2*i + 1
+	right := 2*i + 2
+
+	if left < n && arr[left] > arr[largest] {
+		largest = left
+	}
+
+	if right < n && arr[right] > arr[largest] {
+		largest = right
+	}
+
+	if largest != i {
+		arr[i], arr[largest] = arr[largest], arr[i]
+		*innerCalls++
+		heapify(arr, n, largest, totalCalls, innerCalls)
+	}
+}
+
+func average(nums []int) float64 {
+	sum := 0
+	for _, n := range nums {
+		sum += n
+	}
+	return float64(sum) / float64(len(nums))
+}
+
+func saveToCSV(results []SeriesResult, filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Записываем заголовки
+	headers := []string{
+		"Series",
+		"Attempt",
+		"M",
+		"Time(ns)",
+		"TotalHeapify",
+		"InnerHeapify",
+	}
+	if err := writer.Write(headers); err != nil {
+		return err
+	}
+
+	for seriesIdx, res := range results {
+		for attemptIdx := 0; attemptIdx < len(res.Times); attemptIdx++ {
+			record := []string{
+				fmt.Sprintf("%d", seriesIdx+1),
+				fmt.Sprintf("%d", attemptIdx+1),
+				fmt.Sprintf("%d", res.M),
+				fmt.Sprintf("%d", res.Times[attemptIdx].Nanoseconds()),
+				fmt.Sprintf("%d", res.TotalHeapifyCalls[attemptIdx]),
+				fmt.Sprintf("%d", res.InnerHeapifyCalls[attemptIdx]),
+			}
+			if err := writer.Write(record); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func saveStatsToCSV(results []SeriesResult, filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	headers := []string{
+		"Series",
+		"M",
+		"AvgTime(ns)",
+		"AvgTotalHeapify",
+		"AvgInnerHeapify",
+	}
+	if err := writer.Write(headers); err != nil {
+		return err
+	}
+
+	for seriesIdx, res := range results {
+		avgTime := time.Duration(0)
+		for _, t := range res.Times {
+			avgTime += t
+		}
+		avgTime /= time.Duration(len(res.Times))
+
+		record := []string{
+			fmt.Sprintf("%d", seriesIdx+1),
+			fmt.Sprintf("%d", res.M),
+			fmt.Sprintf("%d", avgTime.Nanoseconds()),
+			fmt.Sprintf("%.1f", average(res.TotalHeapifyCalls)),
+			fmt.Sprintf("%.1f", average(res.InnerHeapifyCalls)),
+		}
+		if err := writer.Write(record); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

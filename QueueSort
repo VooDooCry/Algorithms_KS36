@@ -1,0 +1,342 @@
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"strconv"
+	"strings"
+	"time"
+)
+
+type Node[T any] struct {
+	data T
+	next *Node[T]
+}
+
+type Queue[T any] struct {
+	head *Node[T]
+	tail *Node[T]
+	size int
+}
+
+func (q *Queue[T]) Push(value T) {
+	newNode := &Node[T]{data: value}
+	if q.tail != nil {
+		q.tail.next = newNode
+	} else {
+		q.head = newNode
+	}
+	q.tail = newNode
+	q.size++
+}
+
+func (q *Queue[T]) Pop() {
+	if q.IsEmpty() {
+		panic("Очередь пуста")
+	}
+	q.head = q.head.next
+	if q.head == nil {
+		q.tail = nil
+	}
+	q.size--
+}
+
+func (q *Queue[T]) Front() T {
+	if q.IsEmpty() {
+		panic("Очередь пуста")
+	}
+	return q.head.data
+}
+
+func (q *Queue[T]) IsEmpty() bool {
+	return q.size == 0
+}
+
+func (q *Queue[T]) GetSize() int {
+	return q.size
+}
+
+func (q *Queue[T]) Elements() []T {
+	elements := make([]T, 0, q.size)
+	current := q.head
+	for current != nil {
+		elements = append(elements, current.data)
+		current = current.next
+	}
+	return elements
+}
+
+type Queue2[T any] struct {
+	stackIn  []T
+	stackOut []T
+}
+
+func (q *Queue2[T]) shiftStacks() {
+	if len(q.stackOut) == 0 {
+		for len(q.stackIn) > 0 {
+			last := len(q.stackIn) - 1
+			q.stackOut = append(q.stackOut, q.stackIn[last])
+			q.stackIn = q.stackIn[:last]
+		}
+	}
+}
+
+func (q *Queue2[T]) Push(value T) {
+	q.stackIn = append(q.stackIn, value)
+}
+
+func (q *Queue2[T]) Pop() {
+	if q.IsEmpty() {
+		panic("Очередь пуста")
+	}
+	q.shiftStacks()
+	q.stackOut = q.stackOut[:len(q.stackOut)-1]
+}
+
+func (q *Queue2[T]) Front() T {
+	if q.IsEmpty() {
+		panic("Очередь пуста")
+	}
+	q.shiftStacks()
+	return q.stackOut[len(q.stackOut)-1]
+}
+
+func (q *Queue2[T]) IsEmpty() bool {
+	return len(q.stackIn) == 0 && len(q.stackOut) == 0
+}
+
+func (q *Queue2[T]) GetSize() int {
+	return len(q.stackIn) + len(q.stackOut)
+}
+
+func (q *Queue2[T]) Elements() []T {
+	var elements []T
+	for i := len(q.stackOut) - 1; i >= 0; i-- {
+		elements = append(elements, q.stackOut[i])
+	}
+	elements = append(elements, q.stackIn...)
+	return elements
+}
+
+func print[T any](queue *Queue[T], queue2 *Queue2[T]) {
+	fmt.Print("Список очереди: ")
+	for _, e := range queue.Elements() {
+		fmt.Print(e, " ")
+	}
+	fmt.Println()
+	if !queue.IsEmpty() {
+		fmt.Printf("Первый элемент: %v\n", queue.Front())
+		fmt.Printf("Размер очереди: %d\n\n", queue.GetSize())
+	} else {
+		fmt.Print("Очередь пуста\n")
+	}
+
+	fmt.Print("\tОчередь из двух стеков: ")
+	for _, e := range queue2.Elements() {
+		fmt.Print(e, " ")
+	}
+	fmt.Println()
+	if !queue2.IsEmpty() {
+		fmt.Printf("Первый элемент: %v\n", queue2.Front())
+		fmt.Printf("Размер очереди: %d\n", queue2.GetSize())
+	} else {
+		fmt.Println("Очередь пуста")
+	}
+}
+
+func test1() {
+	queue := &Queue[int]{}
+	queue2 := &Queue2[int]{}
+	sum := 0
+	minValue := 1001
+	maxValue := -1001
+
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 1000; i++ {
+		value := rand.Intn(2001) - 1000
+		queue.Push(value)
+		queue2.Push(value)
+
+		sum += value
+
+		if value < minValue {
+			minValue = value
+		}
+		if value > maxValue {
+			maxValue = value
+		}
+	}
+
+	fmt.Println("Тест 1: целые числа")
+	print(queue, queue2)
+	fmt.Printf("Сумма: %d\n", sum)
+	fmt.Printf("Среднее значение: %.2f\n", float64(sum)/float64(queue.GetSize()))
+	fmt.Printf("Минимальное: %d\n", minValue)
+	fmt.Printf("Максимальное: %d\n", maxValue)
+}
+
+func test2() {
+	queue := &Queue[string]{}
+	queue2 := &Queue2[string]{}
+
+	elements := []string{"Никита", "банан", "рыба", "яблоко", "асфальт",
+		"лампа", "виноград", "Родина", "семнадцать", "лемон"}
+
+	for i := 0; i < 10; i++ {
+		idx := rand.Intn(10)
+		queue.Push(elements[idx])
+		idx = rand.Intn(10)
+		queue2.Push(elements[idx])
+	}
+
+	fmt.Println("\n\nТест 2: Строки\n\t")
+	print(queue, queue2)
+
+}
+
+type Person struct {
+	Surname    string
+	Name       string
+	Patronymic string
+	BirthDate  string
+}
+
+func test3() {
+	queue := &Queue[Person]{}
+	queue2 := &Queue2[Person]{}
+
+	surnames := []string{"Потапов", "Бекоев", "Смирнов"}
+	names := []string{"Иван", "Николай", "Андрей"}
+	patronymics := []string{"Иванович", "Сергеевич", "Петрович"}
+
+	for i := 0; i < 100; i++ {
+		day := rand.Intn(28) + 1
+		month := rand.Intn(12) + 1
+		year := rand.Intn(41) + 1980
+		date := fmt.Sprintf("%02d.%02d.%d", day, month, year)
+
+		p := Person{
+			Surname:    surnames[rand.Intn(len(surnames))],
+			Name:       names[rand.Intn(len(names))],
+			Patronymic: patronymics[rand.Intn(len(patronymics))],
+			BirthDate:  date,
+		}
+		queue.Push(p)
+		queue2.Push(p)
+	}
+
+	younger20 := &Queue[Person]{}
+	older30 := &Queue[Person]{}
+	for !queue.IsEmpty() {
+		p := queue.Front()
+		queue.Pop()
+
+		parts := strings.Split(p.BirthDate, ".")
+		year, _ := strconv.Atoi(parts[2])
+		age := 2023 - year
+
+		if age < 20 {
+			younger20.Push(p)
+		} else if age > 30 {
+			older30.Push(p)
+		}
+	}
+
+	younger20_2 := &Queue2[Person]{}
+	older30_2 := &Queue2[Person]{}
+	for !queue2.IsEmpty() {
+		p := queue2.Front()
+		queue2.Pop()
+
+		parts := strings.Split(p.BirthDate, ".")
+		year, _ := strconv.Atoi(parts[2])
+		age := 2023 - year
+
+		if age < 20 {
+			younger20_2.Push(p)
+		} else if age > 30 {
+			older30_2.Push(p)
+		}
+	}
+
+	fmt.Println("\nТест 3: Структура")
+	fmt.Printf("Меньше 20 лет: %d\n", younger20.GetSize())
+	fmt.Printf("Старше 30 лет: %d\n\n", older30.GetSize())
+	fmt.Printf("Моложе 20 лет: %d\n", younger20_2.GetSize())
+	fmt.Printf("Старше 30 лет: %d\n", older30_2.GetSize())
+
+}
+
+func reverseRecursive[T any](queue *Queue[T], queue2 *Queue2[T]) {
+	if queue.IsEmpty() || queue2.IsEmpty() {
+		return
+	}
+
+	element := queue.Front()
+	queue.Pop()
+
+	element2 := queue2.Front()
+	queue2.Pop()
+
+	reverseRecursive(queue, queue2)
+
+	queue.Push(element)
+	queue2.Push(element2)
+}
+
+func inversion() {
+	queue := &Queue[int]{}
+	queue2 := &Queue2[int]{}
+	size := 10
+
+	for i := 0; i < size; i++ {
+		queue.Push(i)
+		queue2.Push(i)
+	}
+
+	fmt.Println("\nТест 4: Инверсия")
+	fmt.Println("Исходная очередь")
+	print(queue, queue2)
+
+	reverseRecursive(queue, queue2)
+
+	fmt.Println("\nПеревернутая очередь")
+	print(queue, queue2)
+}
+
+func comparePerformance() {
+	const N = 1000000
+
+	queue := &Queue[int]{}
+	start := time.Now()
+	for i := 0; i < N; i++ {
+		queue.Push(i)
+	}
+	for i := 0; i < N; i++ {
+		queue.Pop()
+	}
+	durationLinkedList := time.Since(start)
+
+	queue2 := &Queue2[int]{}
+	start = time.Now()
+	for i := 0; i < N; i++ {
+		queue2.Push(i)
+	}
+	for i := 0; i < N; i++ {
+		queue2.Pop()
+	}
+	durationTwoStacks := time.Since(start)
+
+	fmt.Println("\nСравнение показателей:")
+	fmt.Printf("Очередь связанных списков: %d ms\n", durationLinkedList.Milliseconds())
+	fmt.Printf("Очередь из двух стеков: %d ms\n", durationTwoStacks.Milliseconds())
+
+}
+
+func main() {
+	test1()
+	test2()
+	test3()
+	inversion()
+	comparePerformance()
+}

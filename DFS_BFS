@@ -1,0 +1,301 @@
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"os"
+	"time"
+)
+
+type Graph struct {
+	directed      bool
+	vertices      int
+	edges         [][2]int
+	adjacencyList [][]int
+}
+
+func NewGraph(directed bool, vertices int, edges [][2]int) *Graph {
+	g := &Graph{
+		directed: directed,
+		vertices: vertices,
+		edges:    edges,
+	}
+	g.generateAdjacencyList()
+	return g
+}
+
+func (g *Graph) generateAdjacencyList() {
+	adj := make([][]int, g.vertices)
+	for _, edge := range g.edges {
+		a, b := edge[0], edge[1]
+		adj[a] = append(adj[a], b)
+		if !g.directed {
+			adj[b] = append(adj[b], a)
+		}
+	}
+	g.adjacencyList = adj
+}
+
+func (g *Graph) AdjacencyMatrix() [][]int {
+	matrix := make([][]int, g.vertices)
+	for i := range matrix {
+		matrix[i] = make([]int, g.vertices)
+	}
+	for _, edge := range g.edges {
+		a, b := edge[0], edge[1]
+		matrix[a][b] = 1
+		if !g.directed {
+			matrix[b][a] = 1
+		}
+	}
+	return matrix
+}
+
+func (g *Graph) IncidenceMatrix() [][]int {
+	edgeCount := len(g.edges)
+	matrix := make([][]int, g.vertices)
+	for i := range matrix {
+		matrix[i] = make([]int, edgeCount)
+	}
+	for i, edge := range g.edges {
+		a, b := edge[0], edge[1]
+		if g.directed {
+			matrix[a][i] = 1
+			matrix[b][i] = -1
+		} else {
+			matrix[a][i] = 1
+			matrix[b][i] = 1
+		}
+	}
+	return matrix
+}
+
+func (g *Graph) AdjacencyList() [][]int {
+	return g.adjacencyList
+}
+
+func (g *Graph) EdgeList() [][2]int {
+	return g.edges
+}
+
+type Generator struct {
+	MinVertices  int
+	MaxVertices  int
+	MinEdges     int
+	MaxEdges     int
+	MaxDegree    int
+	Directed     bool
+	MaxInDegree  int
+	MaxOutDegree int
+}
+
+func (g *Generator) Generate() *Graph {
+	rand.Seed(time.Now().UnixNano())
+	V := g.MinVertices + rand.Intn(g.MaxVertices-g.MinVertices+1)
+	maxPossibleEdges := V * (V - 1)
+	if !g.Directed {
+		maxPossibleEdges /= 2
+	}
+	desiredEdges := g.MinEdges + rand.Intn(g.MaxEdges-g.MinEdges+1)
+	if desiredEdges > maxPossibleEdges {
+		desiredEdges = maxPossibleEdges
+	}
+
+	edges := make([][2]int, 0)
+	edgeMap := make(map[[2]int]bool)
+	outDegree := make([]int, V)
+	inDegree := make([]int, V)
+
+	for len(edges) < desiredEdges {
+		a := rand.Intn(V)
+		b := rand.Intn(V)
+		if a == b {
+			continue
+		}
+		if !g.Directed && a > b {
+			a, b = b, a
+		}
+
+		key := [2]int{a, b}
+		if edgeMap[key] || (!g.Directed && edgeMap[[2]int{b, a}]) {
+			continue
+		}
+
+		if g.Directed {
+			if (g.MaxOutDegree > 0 && outDegree[a] >= g.MaxOutDegree) ||
+				(g.MaxInDegree > 0 && inDegree[b] >= g.MaxInDegree) {
+				continue
+			}
+		} else {
+			if g.MaxDegree > 0 && (outDegree[a] >= g.MaxDegree || outDegree[b] >= g.MaxDegree) {
+				continue
+			}
+		}
+
+		edgeMap[key] = true
+		edges = append(edges, [2]int{a, b})
+		if g.Directed {
+			outDegree[a]++
+			inDegree[b]++
+		} else {
+			outDegree[a]++
+			outDegree[b]++
+		}
+	}
+
+	return NewGraph(g.Directed, V, edges)
+}
+
+func BFS(g *Graph, start, end int) []int {
+	visited := make([]bool, g.vertices)
+	parent := make([]int, g.vertices)
+	for i := range parent {
+		parent[i] = -1
+	}
+	queue := []int{start}
+	visited[start] = true
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if current == end {
+			path := []int{}
+			for current != -1 {
+				path = append([]int{current}, path...)
+				current = parent[current]
+			}
+			return path
+		}
+		for _, neighbor := range g.adjacencyList[current] {
+			if !visited[neighbor] {
+				visited[neighbor] = true
+				parent[neighbor] = current
+				queue = append(queue, neighbor)
+			}
+		}
+	}
+	return nil
+}
+
+func DFS(g *Graph, start, end int) []int {
+	visited := make([]bool, g.vertices)
+	parent := make([]int, g.vertices)
+	for i := range parent {
+		parent[i] = -1
+	}
+	stack := []int{start}
+	visited[start] = true
+
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		if current == end {
+			path := []int{}
+			for current != -1 {
+				path = append([]int{current}, path...)
+				current = parent[current]
+			}
+			return path
+		}
+
+		for _, neighbor := range g.adjacencyList[current] {
+			if !visited[neighbor] {
+				visited[neighbor] = true
+				parent[neighbor] = current
+				stack = append(stack, neighbor)
+			}
+		}
+	}
+	return nil
+}
+
+func main() {
+	rand.Seed(time.Now().UnixNano())
+
+	file, err := os.Create("benchmark_results.csv")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	fmt.Fprintln(file, "Vertices,Edges,BFS_Time_Seconds,DFS_Time_Seconds")
+
+	for i := 0; i < 10; i++ {
+		vertices := 10 * (i + 1)
+		maxPossibleEdges := vertices * (vertices - 1) / 2
+		minEdges := maxPossibleEdges / 4
+		maxEdges := maxPossibleEdges / 2
+
+		generator := Generator{
+			MinVertices: vertices,
+			MaxVertices: vertices,
+			MinEdges:    minEdges,
+			MaxEdges:    maxEdges,
+			Directed:    false,
+			MaxDegree:   vertices / 2,
+		}
+
+		graph := generator.Generate()
+
+		A := rand.Intn(graph.vertices)
+		B := rand.Intn(graph.vertices)
+		for A == B {
+			B = rand.Intn(graph.vertices)
+		}
+
+		if i < 10 {
+			fmt.Printf("\n--- Граф %d ---\n", i+1)
+
+			fmt.Println("Список рёбер:")
+			for _, edge := range graph.EdgeList() {
+				fmt.Printf("(%d -> %d) ", edge[0], edge[1])
+			}
+			fmt.Println("")
+
+			fmt.Println("Список смежности (первые 10 вершин):")
+			for v := 0; v < 10 && v < graph.vertices; v++ {
+				fmt.Printf("Вершина %d: %v\n", v, graph.AdjacencyList()[v])
+			}
+			fmt.Println()
+
+			if graph.vertices > 0 {
+				fmt.Println("Матрица смежности (10x10):")
+				adjMatrix := graph.AdjacencyMatrix()
+				for i := 0; i < 10 && i < graph.vertices; i++ {
+					fmt.Println(adjMatrix[i][:10])
+				}
+				fmt.Println()
+			}
+
+			fmt.Println("Матрица инцидентности (первые 10 строк и столбцов):")
+			incMatrix := graph.IncidenceMatrix()
+			for row := 0; row < 10 && row < len(incMatrix); row++ {
+				end := 10
+				if len(incMatrix[row]) < end {
+					end = len(incMatrix[row])
+				}
+				fmt.Println(incMatrix[row][:end])
+			}
+			fmt.Println()
+		}
+		start := time.Now()
+		bfsPath := BFS(graph, A, B)
+		bfsTime := time.Since(start)
+
+		start = time.Now()
+		dfsPath := DFS(graph, A, B)
+		dfsTime := time.Since(start)
+
+		fmt.Fprintf(file, "%d,%d,%.10f,%.10f\n",
+			vertices,
+			len(graph.edges),
+			bfsTime.Seconds(),
+			dfsTime.Seconds(),
+		)
+		fmt.Printf("Граф %d: Вершин = %d, Рёбер = %d\n", i+1, vertices, len(graph.edges))
+		fmt.Printf("Путь из %d в %d:\n", A, B)
+		fmt.Printf("BFS: %v\n", bfsPath)
+		fmt.Printf("DFS: %v\n\n", dfsPath)
+	}
+}

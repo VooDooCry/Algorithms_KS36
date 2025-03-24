@@ -1,0 +1,144 @@
+package main
+
+import (
+	"fmt"
+	"math"
+	"math/rand"
+	"time"
+)
+
+func generateGraph(n, k int) [][]int {
+	rand.Seed(time.Now().UnixNano())
+	matrix := make([][]int, n)
+	for i := range matrix {
+		matrix[i] = make([]int, n)
+	}
+
+	for i := 0; i < n-1; i++ {
+		weight := rand.Intn(20) + 1
+		matrix[i][i+1] = weight
+		matrix[i+1][i] = weight
+	}
+
+	for u := 0; u < n; u++ {
+		for {
+			degree := 0
+			for v := 0; v < n; v++ {
+				if matrix[u][v] > 0 {
+					degree++
+				}
+			}
+			if degree >= k {
+				break
+			}
+
+			candidates := []int{}
+			for v := 0; v < n; v++ {
+				if v != u && matrix[u][v] == 0 {
+					candidates = append(candidates, v)
+				}
+			}
+
+			if len(candidates) == 0 {
+				break
+			}
+
+			v := candidates[rand.Intn(len(candidates))]
+			weight := rand.Intn(20) + 1
+			matrix[u][v] = weight
+			matrix[v][u] = weight
+		}
+	}
+
+	return matrix
+}
+
+func printAdjacencyMatrix(matrix [][]int) {
+	fmt.Println("\nМатрица смежности:")
+	for i := 0; i < len(matrix); i++ {
+		for j := 0; j < len(matrix[i]); j++ {
+			if matrix[i][j] > 0 {
+				fmt.Printf("%3d ", matrix[i][j])
+			} else {
+				fmt.Printf("  . ")
+			}
+		}
+		fmt.Println()
+	}
+}
+
+func floydWarshall(matrix [][]int) [][]int {
+	n := len(matrix)
+	dist := make([][]int, n)
+	for i := range dist {
+		dist[i] = make([]int, n)
+		for j := range dist[i] {
+			if i == j {
+				dist[i][j] = 0
+			} else if matrix[i][j] > 0 {
+				dist[i][j] = matrix[i][j]
+			} else {
+				dist[i][j] = math.MaxInt32
+			}
+		}
+	}
+
+	for k := 0; k < n; k++ {
+		for i := 0; i < n; i++ {
+			for j := 0; j < n; j++ {
+				if dist[i][k] != math.MaxInt32 && dist[k][j] != math.MaxInt32 && dist[i][k]+dist[k][j] < dist[i][j] {
+					dist[i][j] = dist[i][k] + dist[k][j]
+				}
+			}
+		}
+	}
+
+	return dist
+}
+
+func main() {
+	sizes := []struct {
+		n int
+		k int
+	}{
+		{10, 3},
+		{20, 4},
+		{50, 10},
+		{100, 20},
+	}
+
+	results := make(map[int][]float64)
+
+	for _, size := range sizes {
+		n := size.n
+		k := size.k
+		fmt.Printf("\n=== Тестирование n=%d, k=%d ===\n", n, k)
+
+		tests := 5
+		var totalDuration time.Duration
+
+		for t := 0; t < tests; t++ {
+			graph := generateGraph(n, k)
+
+			if t == 0 {
+				fmt.Printf("\nПример матрицы для n=%d:\n", n)
+				printAdjacencyMatrix(graph)
+			}
+
+			start := time.Now()
+			floydWarshall(graph)
+			duration := time.Since(start)
+
+			totalDuration += duration
+			fmt.Printf("Тст %d для N = %d: %v\n", t+1, n, duration)
+		}
+
+		avgTime := totalDuration.Seconds() / float64(tests)
+		results[n] = append(results[n], avgTime)
+	}
+
+	fmt.Println("\nСреднее время выполнения:")
+	for n, times := range results {
+		fmt.Printf("N=%d: %.6f сек\n", n, times[0])
+	}
+}

@@ -1,0 +1,508 @@
+package main
+
+import (
+	"encoding/csv"
+	"fmt"
+	"math"
+	"math/rand"
+	"os"
+	"time"
+)
+
+type BSTNode struct {
+	value int
+	left  *BSTNode
+	right *BSTNode
+}
+
+type BST struct {
+	root *BSTNode
+}
+
+func (t *BST) Insert(value int) {
+	if t.root == nil {
+		t.root = &BSTNode{value: value}
+		return
+	}
+
+	current := t.root
+	for {
+		if value < current.value {
+			if current.left == nil {
+				current.left = &BSTNode{value: value}
+				return
+			}
+			current = current.left
+		} else {
+			if current.right == nil {
+				current.right = &BSTNode{value: value}
+				return
+			}
+			current = current.right
+		}
+	}
+}
+
+func (t *BST) Search(value int) bool {
+	current := t.root
+	for current != nil {
+		if value == current.value {
+			return true
+		} else if value < current.value {
+			current = current.left
+		} else {
+			current = current.right
+		}
+	}
+	return false
+}
+
+func (t *BST) Delete(value int) {
+	var parent *BSTNode
+	current := t.root
+	for current != nil && current.value != value {
+		parent = current
+		if value < current.value {
+			current = current.left
+		} else {
+			current = current.right
+		}
+	}
+
+	if current == nil {
+		return
+	}
+
+	if current.left == nil && current.right == nil {
+		if parent == nil {
+			t.root = nil
+		} else if parent.left == current {
+			parent.left = nil
+		} else {
+			parent.right = nil
+		}
+		return
+	}
+
+	var child *BSTNode
+	if current.left != nil {
+		child = current.left
+	} else {
+		child = current.right
+	}
+
+	if parent == nil {
+		t.root = child
+	} else if parent.left == current {
+		parent.left = child
+	} else {
+		parent.right = child
+	}
+
+	if current.left != nil && current.right != nil {
+		successorParent := current
+		successor := current.right
+		for successor.left != nil {
+			successorParent = successor
+			successor = successor.left
+		}
+		current.value = successor.value
+		if successorParent.left == successor {
+			successorParent.left = successor.right
+		} else {
+			successorParent.right = successor.right
+		}
+	}
+}
+
+type AVLNode struct {
+	value       int
+	left, right *AVLNode
+	height      int
+}
+
+type AVLTree struct {
+	root *AVLNode
+}
+
+func (t *AVLTree) height(node *AVLNode) int {
+	if node == nil {
+		return 0
+	}
+	return node.height
+}
+
+func (t *AVLTree) updateHeight(node *AVLNode) {
+	max := func(a, b int) int {
+		if a > b {
+			return a
+		}
+		return b
+	}
+	node.height = 1 + max(t.height(node.left), t.height(node.right))
+}
+
+func (t *AVLTree) balanceFactor(node *AVLNode) int {
+	if node == nil {
+		return 0
+	}
+	return t.height(node.left) - t.height(node.right)
+}
+
+func (t *AVLTree) rotateRight(y *AVLNode) *AVLNode {
+	x := y.left
+	T2 := x.right
+
+	x.right = y
+	y.left = T2
+
+	t.updateHeight(y)
+	t.updateHeight(x)
+
+	return x
+}
+
+func (t *AVLTree) rotateLeft(x *AVLNode) *AVLNode {
+	y := x.right
+	T2 := y.left
+
+	y.left = x
+	x.right = T2
+
+	t.updateHeight(x)
+	t.updateHeight(y)
+
+	return y
+}
+
+func (t *AVLTree) balance(node *AVLNode) *AVLNode {
+	balance := t.balanceFactor(node)
+
+	if balance > 1 {
+		if t.balanceFactor(node.left) >= 0 {
+			return t.rotateRight(node)
+		} else {
+			node.left = t.rotateLeft(node.left)
+			return t.rotateRight(node)
+		}
+	}
+
+	if balance < -1 {
+		if t.balanceFactor(node.right) <= 0 {
+			return t.rotateLeft(node)
+		} else {
+			node.right = t.rotateRight(node.right)
+			return t.rotateLeft(node)
+		}
+	}
+
+	return node
+}
+
+func (t *AVLTree) Insert(value int) {
+	t.root = t.insert(t.root, value)
+}
+
+func (t *AVLTree) insert(node *AVLNode, value int) *AVLNode {
+	if node == nil {
+		return &AVLNode{value: value, height: 1}
+	}
+
+	if value < node.value {
+		node.left = t.insert(node.left, value)
+	} else if value > node.value {
+		node.right = t.insert(node.right, value)
+	} else {
+		return node
+	}
+
+	t.updateHeight(node)
+	return t.balance(node)
+}
+
+func (t *AVLTree) Delete(value int) {
+	t.root = t.delete(t.root, value)
+}
+
+func (t *AVLTree) delete(node *AVLNode, value int) *AVLNode {
+	if node == nil {
+		return nil
+	}
+
+	if value < node.value {
+		node.left = t.delete(node.left, value)
+	} else if value > node.value {
+		node.right = t.delete(node.right, value)
+	} else {
+		if node.left == nil || node.right == nil {
+			var temp *AVLNode
+			if node.left != nil {
+				temp = node.left
+			} else {
+				temp = node.right
+			}
+
+			if temp == nil {
+				temp = node
+				node = nil
+			} else {
+				*node = *temp
+			}
+		} else {
+			temp := t.findMin(node.right)
+			node.value = temp.value
+			node.right = t.delete(node.right, temp.value)
+		}
+	}
+
+	if node == nil {
+		return nil
+	}
+
+	t.updateHeight(node)
+	return t.balance(node)
+}
+
+func (t *AVLTree) findMin(node *AVLNode) *AVLNode {
+	current := node
+	for current.left != nil {
+		current = current.left
+	}
+	return current
+}
+
+func (t *AVLTree) Search(value int) bool {
+	return t.search(t.root, value)
+}
+
+func (t *AVLTree) search(node *AVLNode, value int) bool {
+	if node == nil {
+		return false
+	}
+	if value == node.value {
+		return true
+	} else if value < node.value {
+		return t.search(node.left, value)
+	} else {
+		return t.search(node.right, value)
+	}
+}
+
+func generateArray(n int, sorted bool) []int {
+	arr := make([]int, n)
+	for i := 0; i < n; i++ {
+		arr[i] = i
+	}
+	if !sorted {
+		rand.Shuffle(n, func(i, j int) { arr[i], arr[j] = arr[j], arr[i] })
+	}
+	return arr
+}
+
+func linearSearch(arr []int, value int) bool {
+	for _, v := range arr {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
+func binarySearch(arr []int, value int) bool {
+	low, high := 0, len(arr)-1
+	for low <= high {
+		mid := (low + high) / 2
+		if arr[mid] == value {
+			return true
+		} else if arr[mid] < value {
+			low = mid + 1
+		} else {
+			high = mid - 1
+		}
+	}
+	return false
+}
+
+type Result struct {
+	Series      int
+	NumElements int
+	DataType    string
+	BSTInsert   time.Duration
+	AVLInsert   time.Duration
+	BSTSearch   time.Duration
+	AVLSearch   time.Duration
+	ArraySearch time.Duration
+	BSTDelete   time.Duration
+	AVLDelete   time.Duration
+}
+
+func saveToCSV(results []Result) {
+	file, err := os.Create("results.csv")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write header
+	header := []string{
+		"Series", "NumElements", "DataType",
+		"BSTInsert", "AVLInsert",
+		"BSTSearch", "AVLSearch", "ArraySearch",
+		"BSTDelete", "AVLDelete",
+	}
+	writer.Write(header)
+
+	// Write data
+	for _, res := range results {
+		record := []string{
+			fmt.Sprint(res.Series),
+			fmt.Sprint(res.NumElements),
+			res.DataType,
+			fmt.Sprint(res.BSTInsert.Nanoseconds()),
+			fmt.Sprint(res.AVLInsert.Nanoseconds()),
+			fmt.Sprint(res.BSTSearch.Nanoseconds()),
+			fmt.Sprint(res.AVLSearch.Nanoseconds()),
+			fmt.Sprint(res.ArraySearch.Nanoseconds()),
+			fmt.Sprint(res.BSTDelete.Nanoseconds()),
+			fmt.Sprint(res.AVLDelete.Nanoseconds()),
+		}
+		writer.Write(record)
+	}
+}
+
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	results := make([]Result, 0)
+
+	for series := 0; series < 10; series++ {
+		n := int(math.Pow(2, float64(10+series)))
+		fmt.Printf("Series %d, n=%d\n", series, n)
+
+		var randomResults, sortedResults Result
+
+		for cycle := 0; cycle < 20; cycle++ {
+			sorted := cycle >= 10
+			arr := generateArray(n, sorted)
+
+			var bstInsertTime, avlInsertTime time.Duration
+			var bstSearchTime, avlSearchTime, arraySearchTime time.Duration
+			var bstDeleteTime, avlDeleteTime time.Duration
+
+			// Insert
+			bst := &BST{}
+			start := time.Now()
+			for _, v := range arr {
+				bst.Insert(v)
+			}
+			bstInsertTime = time.Since(start)
+
+			avl := &AVLTree{}
+			start = time.Now()
+			for _, v := range arr {
+				avl.Insert(v)
+			}
+			avlInsertTime = time.Since(start)
+
+			// Search
+			searchValues := make([]int, 1000)
+			for i := 0; i < 1000; i++ {
+				searchValues[i] = rand.Intn(n)
+			}
+
+			start = time.Now()
+			for _, v := range searchValues {
+				bst.Search(v)
+			}
+			bstSearchTime = time.Since(start)
+
+			start = time.Now()
+			for _, v := range searchValues {
+				avl.Search(v)
+			}
+			avlSearchTime = time.Since(start)
+
+			if sorted {
+				start = time.Now()
+				for _, v := range searchValues {
+					binarySearch(arr, v)
+				}
+				arraySearchTime = time.Since(start)
+			} else {
+				start = time.Now()
+				for _, v := range searchValues {
+					linearSearch(arr, v)
+				}
+				arraySearchTime = time.Since(start)
+			}
+
+			// Delete
+			deleteIndices := make([]int, 1000)
+			for i := 0; i < 1000; i++ {
+				deleteIndices[i] = rand.Intn(n)
+			}
+			deleteValues := make([]int, 1000)
+			for i, idx := range deleteIndices {
+				deleteValues[i] = arr[idx]
+			}
+
+			start = time.Now()
+			for _, v := range deleteValues {
+				bst.Delete(v)
+			}
+			bstDeleteTime = time.Since(start)
+
+			start = time.Now()
+			for _, v := range deleteValues {
+				avl.Delete(v)
+			}
+			avlDeleteTime = time.Since(start)
+
+			if sorted {
+				sortedResults.NumElements = n
+				sortedResults.DataType = "sorted"
+				sortedResults.BSTInsert += bstInsertTime
+				sortedResults.AVLInsert += avlInsertTime
+				sortedResults.BSTSearch += bstSearchTime
+				sortedResults.AVLSearch += avlSearchTime
+				sortedResults.ArraySearch += arraySearchTime
+				sortedResults.BSTDelete += bstDeleteTime
+				sortedResults.AVLDelete += avlDeleteTime
+			} else {
+				randomResults.NumElements = n
+				randomResults.DataType = "random"
+				randomResults.BSTInsert += bstInsertTime
+				randomResults.AVLInsert += avlInsertTime
+				randomResults.BSTSearch += bstSearchTime
+				randomResults.AVLSearch += avlSearchTime
+				randomResults.ArraySearch += arraySearchTime
+				randomResults.BSTDelete += bstDeleteTime
+				randomResults.AVLDelete += avlDeleteTime
+			}
+		}
+
+		// Average results
+		randomResults.BSTInsert /= 10
+		randomResults.AVLInsert /= 10
+		randomResults.BSTSearch /= 10
+		randomResults.AVLSearch /= 10
+		randomResults.ArraySearch /= 10
+		randomResults.BSTDelete /= 10
+		randomResults.AVLDelete /= 10
+
+		sortedResults.BSTInsert /= 10
+		sortedResults.AVLInsert /= 10
+		sortedResults.BSTSearch /= 10
+		sortedResults.AVLSearch /= 10
+		sortedResults.ArraySearch /= 10
+		sortedResults.BSTDelete /= 10
+		sortedResults.AVLDelete /= 10
+
+		results = append(results, randomResults, sortedResults)
+	}
+
+	fmt.Println(results)
+	saveToCSV(results)
+}

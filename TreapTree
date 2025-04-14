@@ -1,0 +1,753 @@
+import time
+import random
+import csv
+import numpy as np
+import matplotlib
+
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
+from collections import defaultdict
+
+
+# =============================================
+# Реализация структур данных
+# =============================================
+
+class TreapNode:
+    def __init__(self, key):
+        self.key = key
+        self.priority = random.random()
+        self.left = None
+        self.right = None
+
+
+class Treap:
+    def __init__(self):
+        self.root = None
+
+    def insert(self, key):
+        def _insert(node, key):
+            if not node:
+                return TreapNode(key)
+            if key < node.key:
+                node.left = _insert(node.left, key)
+                if node.left.priority > node.priority:
+                    node = self.rotate_right(node)
+            else:
+                node.right = _insert(node.right, key)
+                if node.right.priority > node.priority:
+                    node = self.rotate_left(node)
+            return node
+
+        self.root = _insert(self.root, key)
+
+    def rotate_right(self, node):
+        left = node.left
+        node.left = left.right
+        left.right = node
+        return left
+
+    def rotate_left(self, node):
+        right = node.right
+        node.right = right.left
+        right.left = node
+        return right
+
+    def delete(self, key):
+        def _delete(node, key):
+            if not node:
+                return node
+            if key < node.key:
+                node.left = _delete(node.left, key)
+            elif key > node.key:
+                node.right = _delete(node.right, key)
+            else:
+                if not node.left:
+                    return node.right
+                if not node.right:
+                    return node.left
+                if node.left.priority > node.right.priority:
+                    node = self.rotate_right(node)
+                    node.right = _delete(node.right, key)
+                else:
+                    node = self.rotate_left(node)
+                    node.left = _delete(node.left, key)
+            return node
+
+        self.root = _delete(self.root, key)
+
+    def search(self, key):
+        def _search(node, key):
+            if not node:
+                return False
+            if key == node.key:
+                return True
+            return _search(node.left, key) if key < node.key else _search(node.right, key)
+
+        return _search(self.root, key)
+
+    def max_depth(self):
+        def _max_depth(node):
+            return 0 if not node else 1 + max(_max_depth(node.left), _max_depth(node.right))
+
+        return _max_depth(self.root)
+
+    def all_depths(self):
+        depths = []
+
+        def _traverse(node, depth):
+            if not node:
+                return
+            if not node.left and not node.right:
+                depths.append(depth)
+                return
+            _traverse(node.left, depth + 1)
+            _traverse(node.right, depth + 1)
+
+        _traverse(self.root, 1)
+        return depths
+
+
+class AVLNode:
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+        self.height = 1
+
+
+class AVLTree:
+    def __init__(self):
+        self.root = None
+
+    def insert(self, key):
+        def _insert(node, key):
+            if not node:
+                return AVLNode(key)
+            if key < node.key:
+                node.left = _insert(node.left, key)
+            else:
+                node.right = _insert(node.right, key)
+
+            node.height = 1 + max(self._height(node.left), self._height(node.right))
+            balance = self._balance(node)
+
+            if balance > 1 and key < node.left.key:
+                return self._rotate_right(node)
+            if balance < -1 and key > node.right.key:
+                return self._rotate_left(node)
+            if balance > 1 and key > node.left.key:
+                node.left = self._rotate_left(node.left)
+                return self._rotate_right(node)
+            if balance < -1 and key < node.right.key:
+                node.right = self._rotate_right(node.right)
+                return self._rotate_left(node)
+            return node
+
+        self.root = _insert(self.root, key)
+
+    def delete(self, key):
+        def _delete(node, key):
+            if not node:
+                return node
+            if key < node.key:
+                node.left = _delete(node.left, key)
+            elif key > node.key:
+                node.right = _delete(node.right, key)
+            else:
+                if not node.left:
+                    return node.right
+                if not node.right:
+                    return node.left
+                temp = self._min_value_node(node.right)
+                node.key = temp.key
+                node.right = _delete(node.right, temp.key)
+
+            if not node:
+                return node
+
+            node.height = 1 + max(self._height(node.left), self._height(node.right))
+            balance = self._balance(node)
+
+            if balance > 1 and self._balance(node.left) >= 0:
+                return self._rotate_right(node)
+            if balance > 1 and self._balance(node.left) < 0:
+                node.left = self._rotate_left(node.left)
+                return self._rotate_right(node)
+            if balance < -1 and self._balance(node.right) <= 0:
+                return self._rotate_left(node)
+            if balance < -1 and self._balance(node.right) > 0:
+                node.right = self._rotate_right(node.right)
+                return self._rotate_left(node)
+            return node
+
+        self.root = _delete(self.root, key)
+
+    def _min_value_node(self, node):
+        if not node:
+            return None  # Защита от None
+        current = node
+        while current.left:
+            current = current.left
+        return current
+    def _height(self, node):
+        return node.height if node else 0
+
+    def _balance(self, node):
+        if not node:
+            return 0  # Баланс для None = 0
+        return self._height(node.left) - self._height(node.right)
+
+    def _rotate_right(self, y):
+        if not y or not y.left:
+            return y
+
+        x = y.left
+        T2 = x.right
+
+        x.right = y
+        y.left = T2
+
+        y.height = 1 + max(self._height(y.left), self._height(y.right))
+        x.height = 1 + max(self._height(x.left), self._height(x.right))
+        return x
+
+    def _rotate_left(self, x):
+        y = x.right
+        T2 = y.left
+
+        y.left = x
+        x.right = T2
+
+        x.height = 1 + max(self._height(x.left), self._height(x.right))
+        y.height = 1 + max(self._height(y.left), self._height(y.right))
+        return y
+
+    def search(self, key):
+        def _search(node, key):
+            if not node:
+                return False
+            if key == node.key:
+                return True
+            return _search(node.left, key) if key < node.key else _search(node.right, key)
+
+        return _search(self.root, key)
+
+    def max_depth(self):
+        def _max_depth(node):
+            return 0 if not node else 1 + max(_max_depth(node.left), _max_depth(node.right))
+
+        return _max_depth(self.root)
+
+    def all_depths(self):
+        depths = []
+
+        def _traverse(node, depth):
+            if not node:
+                return
+            if not node.left and not node.right:
+                depths.append(depth)
+                return
+            _traverse(node.left, depth + 1)
+            _traverse(node.right, depth + 1)
+
+        _traverse(self.root, 1)
+        return depths
+
+
+class RBNode:
+    def __init__(self, key, color='RED'):
+        self.key = key
+        self.color = color
+        self.left = None
+        self.right = None
+        self.parent = None
+
+
+class RBTree:
+    def __init__(self):
+        self.nil = RBNode(None, 'BLACK')
+        self.root = self.nil
+
+    def insert(self, key):
+        new_node = RBNode(key)
+        new_node.left = self.nil
+        new_node.right = self.nil
+        new_node.parent = self.nil
+
+        parent = self.nil
+        current = self.root
+
+        while current != self.nil:
+            parent = current
+            if new_node.key < current.key:
+                current = current.left
+            else:
+                current = current.right
+
+        new_node.parent = parent
+
+        if parent == self.nil:
+            self.root = new_node
+        elif new_node.key < parent.key:
+            parent.left = new_node
+        else:
+            parent.right = new_node
+
+        self._fix_insert(new_node)
+
+    def _fix_insert(self, node):
+        while node != self.root and node.parent.color == 'RED':
+            if node.parent == node.parent.parent.left:
+                uncle = node.parent.parent.right
+                if uncle.color == 'RED':
+                    node.parent.color = 'BLACK'
+                    uncle.color = 'BLACK'
+                    node.parent.parent.color = 'RED'
+                    node = node.parent.parent
+                else:
+                    if node == node.parent.right:
+                        node = node.parent
+                        self._left_rotate(node)
+                    node.parent.color = 'BLACK'
+                    node.parent.parent.color = 'RED'
+                    self._right_rotate(node.parent.parent)
+            else:
+                uncle = node.parent.parent.left
+                if uncle.color == 'RED':
+                    node.parent.color = 'BLACK'
+                    uncle.color = 'BLACK'
+                    node.parent.parent.color = 'RED'
+                    node = node.parent.parent
+                else:
+                    if node == node.parent.left:
+                        node = node.parent
+                        self._right_rotate(node)
+                    node.parent.color = 'BLACK'
+                    node.parent.parent.color = 'RED'
+                    self._left_rotate(node.parent.parent)
+        self.root.color = 'BLACK'
+
+    def _left_rotate(self, x):
+        y = x.right
+        if y == self.nil:
+            return
+        x.right = y.left
+        if y.left != self.nil:
+            y.left.parent = x
+        y.parent = x.parent
+        if x.parent == self.nil:
+            self.root = y
+        elif x == x.parent.left:
+            x.parent.left = y
+        else:
+            x.parent.right = y
+        y.left = x
+        x.parent = y
+
+    def _right_rotate(self, y):
+        x = y.left
+        if x == self.nil:
+            return
+        y.left = x.right
+        if x.right != self.nil:
+            x.right.parent = y
+        x.parent = y.parent
+        if y.parent == self.nil:
+            self.root = x
+        elif y == y.parent.right:
+            y.parent.right = x
+        else:
+            y.parent.left = x
+        x.right = y
+        y.parent = x
+
+    def delete(self, key):
+        node = self._search_node(key)
+        if node == self.nil:
+            return
+        self._delete_node(node)
+
+    def _delete_node(self, node):
+        y = node
+        y_original_color = y.color
+
+        if node.left == self.nil:
+            x = node.right
+            self._transplant(node, node.right)
+        elif node.right == self.nil:
+            x = node.left
+            self._transplant(node, node.left)
+        else:
+            y = self._minimum(node.right)
+            y_original_color = y.color
+            x = y.right
+            if y.parent == node:
+                x.parent = y
+            else:
+                self._transplant(y, y.right)
+                y.right = node.right
+                y.right.parent = y
+            self._transplant(node, y)
+            y.left = node.left
+            y.left.parent = y
+            y.color = node.color
+
+        if y_original_color == 'BLACK':
+            self._fix_delete(x)
+
+    def _fix_delete(self, x):
+        while x != self.root and x.color == 'BLACK':
+            if x == x.parent.left:
+                s = x.parent.right
+                if s == self.nil:
+                    break
+                if s.color == 'RED':
+                    s.color = 'BLACK'
+                    x.parent.color = 'RED'
+                    self._left_rotate(x.parent)
+                    s = x.parent.right
+                if s.left.color == 'BLACK' and s.right.color == 'BLACK':
+                    s.color = 'RED'
+                    x = x.parent
+                else:
+                    if s.right.color == 'BLACK':
+                        s.left.color = 'BLACK'
+                        s.color = 'RED'
+                        self._right_rotate(s)
+                        s = x.parent.right
+                    s.color = x.parent.color
+                    x.parent.color = 'BLACK'
+                    s.right.color = 'BLACK'
+                    self._left_rotate(x.parent)
+                    x = self.root
+            else:
+                s = x.parent.left
+                if s == self.nil:
+                    break
+                if s.color == 'RED':
+                    s.color = 'BLACK'
+                    x.parent.color = 'RED'
+                    self._right_rotate(x.parent)
+                    s = x.parent.left
+                if s.right.color == 'BLACK' and s.left.color == 'BLACK':
+                    s.color = 'RED'
+                    x = x.parent
+                else:
+                    if s.left.color == 'BLACK':
+                        s.right.color = 'BLACK'
+                        s.color = 'RED'
+                        self._left_rotate(s)
+                        s = x.parent.left
+                    s.color = x.parent.color
+                    x.parent.color = 'BLACK'
+                    s.left.color = 'BLACK'
+                    self._right_rotate(x.parent)
+                    x = self.root
+        x.color = 'BLACK'
+
+    def _transplant(self, u, v):
+        if u.parent == self.nil:
+            self.root = v
+        elif u == u.parent.left:
+            u.parent.left = v
+        else:
+            u.parent.right = v
+        v.parent = u.parent
+
+    def _minimum(self, node):
+        while node.left != self.nil:
+            node = node.left
+        return node
+
+    def _search_node(self, key):
+        node = self.root
+        while node != self.nil and key != node.key:
+            if key < node.key:
+                node = node.left
+            else:
+                node = node.right
+        return node
+
+    def search(self, key):
+        return self._search_node(key) != self.nil
+
+    def max_depth(self):
+        def _max_depth(node):
+            if node == self.nil:
+                return 0
+            return 1 + max(_max_depth(node.left), _max_depth(node.right))
+
+        return _max_depth(self.root)
+
+    def all_depths(self):
+        depths = []
+
+        def _traverse(node, depth):
+            if node == self.nil:
+                return
+            if node.left == self.nil and node.right == self.nil:
+                depths.append(depth)
+                return
+            _traverse(node.left, depth + 1)
+            _traverse(node.right, depth + 1)
+
+        _traverse(self.root, 1)
+        return depths
+
+
+# =============================================
+# Тестирование и визуализация
+# =============================================
+
+def generate_data(n, sorted_data=False):
+    data = [random.randint(0, 10 * n) for _ in range(n)]
+    if sorted_data:
+        data.sort()
+    return data
+
+
+def test_tree(tree_class, data, insert_ops, delete_ops, search_ops):
+    # Тестирование вставки
+    insert_time = 0
+    if insert_ops:
+        tree = tree_class()
+        start = time.time()
+        for key in data + insert_ops:
+            tree.insert(key)
+        insert_time = (time.time() - start) / len(insert_ops)
+
+    # Тестирование удаления
+    delete_time = 0
+    if delete_ops:
+        tree = tree_class()
+        for key in data:
+            tree.insert(key)
+        start = time.time()
+        for key in delete_ops:
+            tree.delete(key)
+        delete_time = (time.time() - start) / len(delete_ops) if len(delete_ops) else 0
+
+    # Тестирование поиска
+    search_time = 0
+    if search_ops:
+        tree = tree_class()
+        for key in data:
+            tree.insert(key)
+        start = time.perf_counter()
+        for key in search_ops:
+            tree.search(key)
+        search_time = (time.perf_counter() - start) / len(search_ops)
+
+    # Измерение максимальной глубины и распределения глубин
+    tree = tree_class()
+    for key in data:
+        tree.insert(key)
+    return {
+        'max_depth': tree.max_depth(),
+        'all_depths': tree.all_depths(),
+        'insert_time': insert_time,
+        'delete_time': delete_time,
+        'search_time': search_time
+    }
+
+
+def run_tests():
+    results = []
+    for sorted_flag in [False, True]:
+        for exp in range(10, 16):  # Увеличено до 2^17
+            n = 2 ** exp
+            for _ in range(20):  # Увеличено количество повторений
+                data = generate_data(n, sorted_flag)
+                # Генерация операций, гарантированно отсутствующих в данных
+                insert_ops = [random.randint(10 * n + 1, 11 * n) for _ in range(1000)]
+                delete_ops = random.sample(data, min(1000, len(data))) if len(data) > 0 else []
+                search_ops = random.sample(data, min(100_000, len(data))) + [random.randint(10 * n + 1, 11 * n) for _ in range(100_000)]
+
+                for tree_class in [Treap, AVLTree, RBTree]:
+                    try:
+                        res = test_tree(tree_class, data, insert_ops, delete_ops, search_ops)
+                        results.append({
+                            'n': n,
+                            'type': tree_class.__name__,
+                            'sorted': sorted_flag,
+                            'max_depth': res['max_depth'],
+                            'insert_time': res['insert_time'],
+                            'delete_time': res['delete_time'],
+                            'search_time': res['search_time'],
+                            'all_depths': ','.join(map(str, res['all_depths']))
+                        })
+                    except Exception as e:
+                        print(f"Ошибка: {tree_class.__name__}, N={n}: {str(e)}")
+
+    # Сохранение результатов
+    with open('results.csv', 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=[
+            'n', 'type', 'sorted', 'max_depth',
+            'insert_time', 'delete_time', 'search_time', 'all_depths'
+        ])
+        writer.writeheader()
+        writer.writerows(results)
+
+def plot_results():
+    # Сбор данных
+    data = defaultdict(lambda: {
+        'n': [], 'insert': [], 'delete': [],
+        'search': [], 'max_depth': [], 'all_depths': []
+    })
+
+    with open('results.csv') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            key = f"{row['type']}_{'sorted' if row['sorted'] == 'True' else 'random'}"
+            data[key]['n'].append(int(row['n']))
+            data[key]['insert'].append(float(row['insert_time']))
+            data[key]['delete'].append(float(row['delete_time']))
+            data[key]['search'].append(float(row['search_time']))
+            data[key]['max_depth'].append(int(row['max_depth']))
+            data[key]['all_depths'].extend(map(int, row['all_depths'].split(',')))
+
+    # Обработка данных
+    processed = {}
+    for key in data:
+        df = sorted(zip(data[key]['n'], data[key]['insert'], data[key]['delete'],
+                        data[key]['search'], data[key]['max_depth']))
+
+        unique_n = sorted(set(n for n, _, _, _, _ in df))
+        avg_data = {
+            'insert': [np.mean([i[1] for i in df if i[0] == n]) for n in unique_n],
+            'delete': [np.mean([i[2] for i in df if i[0] == n]) for n in unique_n],
+            'search': [np.mean([i[3] for i in df if i[0] == n]) for n in unique_n],
+            'max_depth': [np.mean([i[4] for i in df if i[0] == n]) for n in unique_n]
+        }
+
+        processed[key] = {
+            'n': unique_n,
+            **avg_data,
+            'all_depths': data[key]['all_depths']
+        }
+
+    # Настройка стиля
+    plt.style.use('ggplot')
+
+    # Цвета
+    colors = {
+        'Treap_random': '#1f77b4',
+        'AVLTree_random': '#ff7f0e',
+        'RBTree_random': '#2ca02c'
+    }
+
+    # Графики производительности
+    fig, axs = plt.subplots(2, 2, figsize=(20, 15))
+
+    # Вставка
+    for key in colors:
+        if key in processed:
+            axs[0, 0].plot(
+                processed[key]['n'],
+                processed[key]['insert'],
+                'o-',
+                color=colors[key],
+                markersize=6,
+                label=key.split('_')[0]
+            )
+    axs[0, 0].set(xscale='log', title='Среднее время вставки',
+                  xlabel='Количество элементов', ylabel='Время (сек)')
+    axs[0, 0].grid(True, linestyle='--', alpha=0.7)
+    axs[0, 0].legend()
+
+    # Удаление
+    for key in colors:
+        if key in processed:
+            axs[0, 1].plot(
+                processed[key]['n'],
+                processed[key]['delete'],
+                'o-',
+                color=colors[key],
+                markersize=6,
+                label=key.split('_')[0]
+            )
+    axs[0, 1].set(xscale='log', title='Среднее время удаления',
+                  xlabel='Количество элементов', ylabel='Время (сек)')
+    axs[0, 1].grid(True, linestyle='--', alpha=0.7)
+    axs[0, 1].legend()
+
+    # Поиск
+    for key in colors:
+        if key in processed:
+            axs[1, 0].plot(
+                processed[key]['n'],
+                processed[key]['search'],
+                'o-',
+                color=colors[key],
+                markersize=6,
+                label=key.split('_')[0]
+            )
+    axs[1, 0].set(xscale='log', title='Среднее время поиска',
+                  xlabel='Количество элементов', ylabel='Время (сек)')
+    axs[1, 0].grid(True, linestyle='--', alpha=0.7)
+    axs[1, 0].legend()
+
+    # Максимальная высота
+    for key in colors:
+        if key in processed:
+            axs[1, 1].plot(
+                processed[key]['n'],
+                processed[key]['max_depth'],
+                'o-',
+                color=colors[key],
+                markersize=6,
+                label=key.split('_')[0]
+            )
+    axs[1, 1].set(xscale='log', title='Максимальная высота',
+                  xlabel='Количество элементов', ylabel='Высота')
+    axs[1, 1].grid(True, linestyle='--', alpha=0.7)
+    axs[1, 1].legend()
+
+    plt.tight_layout()
+    plt.savefig('performance.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # Гистограммы
+    fig, axs = plt.subplots(1, 2, figsize=(18, 8))
+    last_n = 2 ** 18
+    # Максимальные высоты
+    last_n = max(processed['Treap_random']['n'])
+    max_depths = {
+        'Treap': processed['Treap_random']['max_depth'][-1],
+        'AVLTree': processed['AVLTree_random']['max_depth'][-1],
+        'RBTree': processed['RBTree_random']['max_depth'][-1]
+    }
+    axs[0].bar(
+        max_depths.keys(),
+        max_depths.values(),
+        color=[colors[f'{k}_random'] for k in max_depths.keys()]
+    )
+    axs[0].set_title(f'Максимальные высоты (N={last_n})')
+    axs[0].set_ylabel('Высота')
+
+    # Распределение глубин
+    bins = np.linspace(10, 50, 40)
+    for key in ['Treap_random', 'AVLTree_random', 'RBTree_random']:
+        axs[1].hist(
+            processed[key]['all_depths'],
+            bins=bins,
+            alpha=0.6,
+            color=colors[key],
+            density=True,
+            label=key.split('_')[0]
+        )
+    axs[1].set_title('Распределение глубин веток')
+    axs[1].set_xlabel('Глубина')
+    axs[1].set_ylabel('Плотность вероятности')
+    axs[1].legend()
+
+
+    plt.tight_layout()
+    plt.savefig('histograms.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+if __name__ == '__main__':
+    run_tests()
+    plot_results()

@@ -1,0 +1,104 @@
+import hashlib
+import random
+import string
+import time
+from matplotlib import pyplot as plt
+
+def generate_string(length):
+    """Генерирует случайную строку заданной длины."""
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+def modify_string(s, num_changes):
+    """Изменяет строку, заменяя указанное количество символов."""
+    if num_changes <= 0:
+        return s
+    s_list = list(s)
+    indices = random.sample(range(len(s)), num_changes)
+    for i in indices:
+        new_char = random.choice(string.ascii_letters + string.digits)
+        while new_char == s_list[i]:
+            new_char = random.choice(string.ascii_letters + string.digits)
+        s_list[i] = new_char
+    return ''.join(s_list)
+
+def longest_common_substring(s1, s2):
+    """Находит длину наибольшей общей подстроки."""
+    max_len = 0
+    m, n = len(s1), len(s2)
+    dp = [[0]*(n+1) for _ in range(m+1)]
+    for i in range(1, m+1):
+        for j in range(1, n+1):
+            if s1[i-1] == s2[j-1]:
+                dp[i][j] = dp[i-1][j-1] + 1
+                max_len = max(max_len, dp[i][j])
+            else:
+                dp[i][j] = 0
+    return max_len
+
+def test1():
+    """Тест 1: Сравнение хешей для строк с различным числом отличий."""
+    diffs = [1, 2, 4, 8, 16]
+    max_lcs_list = []
+    for diff in diffs:
+        current_max = 0
+        for _ in range(1000):
+            s1 = generate_string(128)
+            s2 = modify_string(s1, diff)
+            h1 = hashlib.md5(s1.encode()).hexdigest()
+            h2 = hashlib.md5(s2.encode()).hexdigest()
+            lcs = longest_common_substring(h1, h2)
+            current_max = max(current_max, lcs)
+        max_lcs_list.append(current_max)
+    plt.plot(diffs, max_lcs_list, 'b-o')
+    plt.xlabel('Количество отличий')
+    plt.ylabel('Макс. длина подстроки')
+    plt.title('Зависимость длины общей подстроки от отличий')
+    plt.grid(True)
+    plt.show()
+
+def test2():
+    """Тест 2: Поиск коллизий для N хешей."""
+    ns = [10**2, 10**3, 10**4, 10**5, 10**6]
+    print("N\tКоллизии")
+    for n in ns:
+        hashes = {}
+        collisions = 0
+        for _ in range(n):
+            s = generate_string(256)
+            h = hashlib.md5(s.encode()).hexdigest()
+            if h in hashes:
+                collisions += 1
+            else:
+                hashes[h] = 1
+        print(f"{n}\t{collisions}")
+
+def test3():
+    """Тест 3: Замер времени хеширования для разных длин."""
+    lengths = [64, 128, 256, 512, 1024, 2048, 4096, 8192]
+    avg_times = []
+    for n in lengths:
+        total_time = 0.0
+        for _ in range(1000):
+            s = generate_string(n)
+            start = time.perf_counter()
+            hashlib.md5(s.encode()).hexdigest()
+            total_time += time.perf_counter() - start
+        avg_time = total_time / 1000
+        avg_times.append(avg_time)
+        print(f"Длина {n}: Среднее время {avg_time:.6f} сек")
+    plt.plot(lengths, avg_times, 'r-o')
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.xlabel('Длина данных')
+    plt.ylabel('Время (сек)')
+    plt.title('Зависимость времени хеширования от длины')
+    plt.grid(True)
+    plt.show()
+
+# Запуск тестов
+print("Тест 1...")
+test1()
+print("Тест 2...")
+test2()
+print("Тест 3...")
+test3()

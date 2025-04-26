@@ -1,0 +1,43 @@
+import random
+import string
+from hashlib import sha3_256
+import matplotlib.pyplot as plt
+
+def generate_string_pair(length, differences):
+    s1 = ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+    s2 = list(s1)
+    positions = random.sample(range(length), differences)
+    for pos in positions:
+        original_char = s2[pos]
+        new_char = random.choice(string.ascii_letters + string.digits.replace(original_char, ''))
+        s2[pos] = new_char
+    return s1, ''.join(s2)
+
+def max_common_substring(hash1, hash2):
+    max_len = current_len = 0
+    for c1, c2 in zip(hash1, hash2):
+        current_len = current_len + 1 if c1 == c2 else 0
+        max_len = max(max_len, current_len)
+    return max_len
+
+def test1():
+    lengths = [1, 2, 4, 8, 16]
+    results = {diff: [] for diff in lengths}
+
+    for diff in lengths:
+        for _ in range(1000):
+            s1, s2 = generate_string_pair(128, diff)
+            h1 = sha3_256(s1.encode()).hexdigest()
+            h2 = sha3_256(s2.encode()).hexdigest()
+            results[diff].append(max_common_substring(h1, h2))
+
+    avg_max_lengths = [sum(results[diff])/1000 for diff in lengths]
+
+    plt.plot(lengths, avg_max_lengths, marker='o')
+    plt.xlabel('Количество различий')
+    plt.ylabel('Средняя максимальная длина совпадений')
+    plt.title('Тест 1: Зависимость длины совпадений от числа различий')
+    plt.grid(True)
+    plt.show()
+
+test1()

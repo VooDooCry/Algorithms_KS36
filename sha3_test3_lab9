@@ -1,0 +1,31 @@
+import random
+import string
+import time
+from hashlib import sha3_256
+import matplotlib.pyplot as plt
+
+
+def test3():
+    lengths = [64, 128, 256, 512, 1024, 2048, 4096, 8192]
+    avg_times = []
+
+    for n in lengths:
+        times = []
+        for _ in range(1000):
+            s = ''.join(random.choices(string.ascii_letters, k=n))
+            start = time.perf_counter()
+            sha3_256(s.encode()).hexdigest()
+            times.append(time.perf_counter() - start)
+        avg_times.append(sum(times) / 1000)
+
+    plt.plot(lengths, avg_times, marker='o')
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.xlabel('Длина строки')
+    plt.ylabel('Среднее время (сек)')
+    plt.title('Тест 3: Зависимость времени хеширования от длины данных')
+    plt.grid(True)
+    plt.show()
+
+
+test3()
